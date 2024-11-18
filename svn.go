@@ -124,6 +124,29 @@ func (a *Repository) Log(relpath string, w io.Writer) (*LogElement, error) {
 	return l, nil
 }
 
+func (a *Repository) LogByRange(relpath string, w io.Writer, firstCommit string, lastCommit string) (*LogElement, error) {
+	log.Printf("getting log for %s\n", relpath)
+	fp := a.FullPath(relpath)
+	cmd := exec.Command("svn", "log", "-v", "-q", "-r", firstCommit+":"+lastCommit, "--xml", fp)
+	log.Printf("executing %+v\n", cmd)
+	buf, err := cmd.CombinedOutput()
+	if w != nil {
+		io.Copy(w, bytes.NewReader(buf))
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "%s", buf)
+		return nil, fmt.Errorf("cannot get log for %s: %s", fp, err)
+	}
+
+	//var l LogElement
+	l := new(LogElement)
+	if err := xml.Unmarshal(buf, &l); err != nil {
+		return nil, fmt.Errorf("cannot parse XML: %s: %s", buf, err)
+	}
+
+	return l, nil
+}
+
 // Export will execute an `svn export` subcommand.
 // combined output of stdout and stderr will be written to w
 // absolute filenames will be written to notifier channel for each exported file
