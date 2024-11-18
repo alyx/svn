@@ -13,6 +13,33 @@ import (
 	"time"
 )
 
+type LogElement struct {
+	XMLName  xml.Name   `xml:"log"`
+	Text     string     `xml:",chardata"`
+	Logentry []LogEntry `xml:"logentry"`
+}
+
+type LogEntry struct {
+	Text     string `xml:",chardata"`
+	Revision string `xml:"revision,attr"`
+	Author   string `xml:"author"`
+	Date     string `xml:"date"`
+	Paths    Paths  `xml:"paths"`
+}
+
+type Paths struct {
+	Text string `xml:",chardata"`
+	Path []Path `xml:"path"`
+}
+
+type Path struct {
+	Path     string `xml:",chardata"`
+	TextMods string `xml:"text-mods,attr"`
+	Kind     string `xml:"kind,attr"`
+	Action   string `xml:"action,attr"`
+	PropMods string `xml:"prop-mods,attr"`
+}
+
 // List represents XML output of an `svn list` subcommand
 type ListElement struct {
 	XMLName xml.Name `xml:"lists"`
@@ -57,7 +84,7 @@ func (a *Repository) FullPath(relpath string) string {
 func (a *Repository) List(relpath string, w io.Writer) ([]Entry, error) {
 	log.Printf("listing %s\n", relpath)
 	fp := a.FullPath(relpath)
-	cmd := exec.Command("svn", "list", "--xml", fp)
+	cmd := exec.Command("svn", "list", "-R", "--xml", fp)
 	log.Printf("executing %+v\n", cmd)
 	buf, err := cmd.CombinedOutput()
 	if w != nil {
@@ -65,13 +92,36 @@ func (a *Repository) List(relpath string, w io.Writer) ([]Entry, error) {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "%s", buf)
-		return nil, fmt.Errorf("Cannot list %s: %s", fp, err)
+		return nil, fmt.Errorf("cannot list %s: %s", fp, err)
 	}
 	var l ListElement
 	if err := xml.Unmarshal(buf, &l); err != nil {
 		return nil, fmt.Errorf("cannot parse XML: %s: %s", buf, err)
 	}
 	return l.Entries, nil
+}
+
+func (a *Repository) Log(relpath string, w io.Writer) (*LogElement, error) {
+	log.Printf("getting log for %s\n", relpath)
+	fp := a.FullPath(relpath)
+	cmd := exec.Command("svn", "log", "-v", "-q", "--xml", fp)
+	log.Printf("executing %+v\n", cmd)
+	buf, err := cmd.CombinedOutput()
+	if w != nil {
+		io.Copy(w, bytes.NewReader(buf))
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "%s", buf)
+		return nil, fmt.Errorf("cannot get log for %s: %s", fp, err)
+	}
+
+	//var l LogElement
+	l := new(LogElement)
+	if err := xml.Unmarshal(buf, &l); err != nil {
+		return nil, fmt.Errorf("cannot parse XML: %s: %s", buf, err)
+	}
+
+	return l, nil
 }
 
 // Export will execute an `svn export` subcommand.
@@ -104,7 +154,7 @@ func (a *Repository) Export(relpath string, into string, w io.Writer, notifier c
 	return nil
 }
 
-// Notify  will report incoming exported filenames to notifier channel
+// Notify  will report incoming exported filenames to notifier channel.
 // channel will be closed once EOF is read
 func exportNotifier(r io.Reader, c chan string) {
 	sc := bufio.NewScanner(r)
