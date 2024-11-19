@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -63,14 +64,16 @@ type Commit struct {
 // Repository holds information about a (possibly remote) repository
 type Repository struct {
 	Location string
+	Logger   *slog.Logger
 }
 
 // NewRepository will initialize the internal structure of a possible remote
 // repository, usually pointing to the parent of the default trunk/ tags/ branches
 // structure.
-func NewRepository(l string) *Repository {
+func NewRepository(l string, logger *slog.Logger) *Repository {
 	return &Repository{
 		Location: l,
+		Logger:   logger,
 	}
 }
 
@@ -82,10 +85,12 @@ func (a *Repository) FullPath(relpath string) string {
 // List will execute an `svn list` subcommand.
 // Any non-nil xmlWriter will receive the XML content
 func (a *Repository) List(relpath string, w io.Writer) ([]Entry, error) {
-	log.Printf("listing %s\n", relpath)
+	//log.Printf("listing %s\n", relpath)
+	a.Logger.Info("listing", "path", relpath)
 	fp := a.FullPath(relpath)
 	cmd := exec.Command("svn", "list", "-R", "--xml", fp)
-	log.Printf("executing %+v\n", cmd)
+	//log.Printf("executing %+v\n", cmd)
+	a.Logger.Info("executing", "cmd", fmt.Sprintf("%+v", cmd))
 	buf, err := cmd.CombinedOutput()
 	if w != nil {
 		io.Copy(w, bytes.NewReader(buf))
@@ -102,10 +107,11 @@ func (a *Repository) List(relpath string, w io.Writer) ([]Entry, error) {
 }
 
 func (a *Repository) Log(relpath string, w io.Writer) (*LogElement, error) {
-	log.Printf("getting log for %s\n", relpath)
+	a.Logger.Info("reading log", "path", relpath)
 	fp := a.FullPath(relpath)
 	cmd := exec.Command("svn", "log", "-v", "-q", "--xml", fp)
-	log.Printf("executing %+v\n", cmd)
+	a.Logger.Info("executing", "cmd", fmt.Sprintf("%+v", cmd))
+
 	buf, err := cmd.CombinedOutput()
 	if w != nil {
 		io.Copy(w, bytes.NewReader(buf))
@@ -125,16 +131,16 @@ func (a *Repository) Log(relpath string, w io.Writer) (*LogElement, error) {
 }
 
 func (a *Repository) LogByRange(relpath string, w io.Writer, firstCommit string, lastCommit string) (*LogElement, error) {
-	log.Printf("getting log for %s\n", relpath)
+	a.Logger.Info("reading ranged log", "path", relpath)
 	fp := a.FullPath(relpath)
 	cmd := exec.Command("svn", "log", "-v", "-q", "-r", firstCommit+":"+lastCommit, "--xml", fp)
-	log.Printf("executing %+v\n", cmd)
+	a.Logger.Info("executing", "cmd", fmt.Sprintf("%+v", cmd))
 	buf, err := cmd.CombinedOutput()
 	if w != nil {
 		io.Copy(w, bytes.NewReader(buf))
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "%s", buf)
+		//fmt.Fprintf(os.Stdout, "%s", buf)
 		return nil, fmt.Errorf("cannot get log for %s: %s", fp, err)
 	}
 
@@ -151,7 +157,7 @@ func (a *Repository) LogByRange(relpath string, w io.Writer, firstCommit string,
 // combined output of stdout and stderr will be written to w
 // absolute filenames will be written to notifier channel for each exported file
 func (a *Repository) Export(relpath string, into string, w io.Writer, notifier chan string) error {
-	log.Printf("exporting %s\n", relpath)
+	a.Logger.Info("exporting", "path", relpath)
 	fp := a.FullPath(relpath)
 	cmd := exec.Command("svn", "export", fp, into)
 
@@ -163,7 +169,7 @@ func (a *Repository) Export(relpath string, into string, w io.Writer, notifier c
 	// stderr is written to w
 	cmd.Stderr = w
 
-	log.Printf("executing %+v\n", cmd)
+	a.Logger.Info("executing", "cmd", fmt.Sprintf("%+v", cmd))
 	if err := cmd.Start(); err != nil {
 		return err
 	}

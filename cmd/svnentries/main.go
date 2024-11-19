@@ -9,7 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -18,7 +18,8 @@ import (
 )
 
 func main() {
-	log.Println("starting svnentries")
+	logger := slog.Default()
+	logger.Info("starting svnentries")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [--since|--sincefile] uri [uri]*\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "    Default timestamp format is RFC 3339, e.g. 'date --rfc-3339=seconds'")
@@ -31,7 +32,7 @@ func main() {
 	sinceformat := flag.String("sinceformat", time.RFC3339, "Default timestamp format (RFC 3339)")
 	flag.Parse()
 
-	r := svn.NewRepository(*repository)
+	r := svn.NewRepository(*repository, logger)
 
 	// Prefer sincefile over since
 	var t time.Time
@@ -48,7 +49,7 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	log.Printf("looking for entries newer than %s\n", t)
+	logger.Info("looking for new entries", "since", t)
 	for _, url := range flag.Args() {
 		es, err := r.List(url, ioutil.Discard)
 		if err != nil {

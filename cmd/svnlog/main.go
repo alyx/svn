@@ -4,22 +4,23 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/jhinrichsen/svn"
 )
 
 func main() {
-	log.Println("starting svnlog")
+	logger := slog.Default()
+	logger.Info("starting svnlog")
 	repository := flag.String("repository", "", "svn repository")
 	firstCommit := flag.String("first", "", "first commit")
 	lastCommit := flag.String("last", "", "last commit")
 	flag.Parse()
 
-	r := svn.NewRepository(*repository)
+	r := svn.NewRepository(*repository, logger)
 
-	log.Printf("finding log entries")
+	logger.Info("finding log entries")
 
 	for _, url := range flag.Args() {
 		var entries *svn.LogElement
@@ -30,7 +31,7 @@ func main() {
 			entries, err = r.Log(url, io.Discard)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error checking %q: %s\n", url, err)
+			logger.Error("error checking url", "url", url, "err", err)
 		}
 		es := entries.Logentry
 		for _, newEntry := range es {
