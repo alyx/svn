@@ -3,24 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/jhinrichsen/svn"
 	"io"
 	"log/slog"
-	"os"
-
-	"github.com/jhinrichsen/svn"
 )
 
 func main() {
 	logger := slog.Default()
-	logger.Info("starting svnlog")
+	slog.SetDefault(logger)
+	slog.Info("starting svnlog")
 	repository := flag.String("repository", "", "svn repository")
 	firstCommit := flag.String("first", "", "first commit")
 	lastCommit := flag.String("last", "", "last commit")
 	flag.Parse()
 
-	r := svn.NewRepository(*repository, logger)
+	r := svn.NewRepository(*repository)
 
-	logger.Info("finding log entries")
+	slog.Info("finding log entries")
 
 	for _, url := range flag.Args() {
 		var entries *svn.LogElement
@@ -31,13 +30,13 @@ func main() {
 			entries, err = r.Log(url, io.Discard)
 		}
 		if err != nil {
-			logger.Error("error checking url", "url", url, "err", err)
+			slog.Error("error checking url", "url", url, "err", err)
 		}
 		es := entries.Logentry
 		for _, newEntry := range es {
-			fmt.Fprintf(os.Stdout, fmt.Sprintf("%s/%s@%s\n", r.Location, url, newEntry.Revision))
+			slog.Debug("found new entry", "url", fmt.Sprintf("%s/%s", r.Location, url), "name", newEntry.Text)
 			for _, path := range newEntry.Paths.Path {
-				fmt.Fprintf(os.Stdout, fmt.Sprintf("--> %s/%s: %s\n", path.Kind, path.Action, path.Path))
+				slog.Debug("found path", "kind", path.Kind, "action", path.Action, "path", path.Path)
 			}
 		}
 	}

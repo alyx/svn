@@ -19,7 +19,8 @@ import (
 
 func main() {
 	logger := slog.Default()
-	logger.Info("starting svnentries")
+	slog.SetDefault(logger)
+	slog.Info("starting svnentries")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [--since|--sincefile] uri [uri]*\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "    Default timestamp format is RFC 3339, e.g. 'date --rfc-3339=seconds'")
@@ -32,7 +33,7 @@ func main() {
 	sinceformat := flag.String("sinceformat", time.RFC3339, "Default timestamp format (RFC 3339)")
 	flag.Parse()
 
-	r := svn.NewRepository(*repository, logger)
+	r := svn.NewRepository(*repository)
 
 	// Prefer sincefile over since
 	var t time.Time
@@ -40,12 +41,12 @@ func main() {
 	if *sincefile != "" {
 		t, err = fio.ModTime(*sincefile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cannot determine timestamp of file %q: %s\n", *sincefile, err)
+			slog.Error("cannot determine timestamp of file", "file", *sincefile, "err", err.Error())
 		}
 	} else {
 		t, err = time.Parse(*sinceformat, *since)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error parsing timestamp %s in format %q: %s", *since, *sinceformat, err)
+			slog.Error("error parsing timestamp", "timestamp", *since, "format", *sinceformat, "err", err.Error())
 			os.Exit(2)
 		}
 	}
@@ -53,11 +54,10 @@ func main() {
 	for _, url := range flag.Args() {
 		es, err := r.List(url, ioutil.Discard)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error checking %q: %s\n", url, err)
+			slog.Error("error checking", "url", url, "err", err.Error())
 		}
 		for _, newEntry := range svn.Since(es, t) {
-			fmt.Fprintf(os.Stdout, fmt.Sprintf("%s/%s/%s\n", r.Location, url, newEntry.Name))
-
+			slog.Debug("found new entry", "url", fmt.Sprintf("%s/%s", r.Location, url), "name", newEntry.Name)
 		}
 	}
 }
